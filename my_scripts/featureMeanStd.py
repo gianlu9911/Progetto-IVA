@@ -1,28 +1,22 @@
 import os
 import sys
+
+import numpy as np
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, project_root)
 
 import warnings
 warnings.filterwarnings("ignore")
-
 import argparse
-import cv2
-import gc
-import math
-import json
-#
 from torchvision.ops import roi_align
-#
 import torch
-from collections import defaultdict
-from torch.multiprocessing import Pool
+
 
 import mmcv
 from mmcv.transforms import Compose
 from mmdet.apis import init_detector
-from mmengine.utils import track_iter_progress, track_parallel_progress
+from mmengine.utils import track_iter_progress
 from mmcv.ops.nms import batched_nms
 from mmengine.visualization import Visualizer
 
@@ -43,11 +37,76 @@ def startup_masa(masa_config, masa_checkpoint, device="cuda:0", unified=True, de
     
     return masa_model, masa_test_pipeline, det_model, test_pipeline
 
+def compute_mean_std(features_dir):
+    """
+    Compute the mean and standard deviation of features saved in the specified directory.
+    """
+
+    # ---- Configurations ----
+    num_levels = 4
+    num_frames = 144
+
+    # ---- Loop over pyramid levels ----
+    for level in range(num_levels):
+        print(f"Processing dense features for level {level}...")
+
+        all_features = []
+
+        for frame_idx in range(num_frames):
+            # Load dense feature file for this frame and level
+            fname = f"features_dense_frame_{frame_idx:05d}_level_{level}.npy"
+            fpath = os.path.join(features_dir, fname)
+
+            if not os.path.exists(fpath):
+                print(f"Warning: {fpath} not found.")
+                continue
+
+            fmap = np.load(fpath)  # shape: (1, C, H, W) or (C, H, W)
+            if fmap.ndim == 4:
+                fmap = fmap.squeeze(0)  # Remove batch dim → (C, H, W)
+
+            C, H, W = fmap.shape
+            fmap = fmap.reshape(C, -1).T  # shape: (H*W, C)
+            all_features.append(fmap)
+
+        if not all_features:
+            print(f"No features found for level {level}. Skipping.")
+            continue
+
+        # Stack all features into one matrix → shape: (N_total, C)
+        all_features_matrix = np.vstack(all_features)
+
+        # Compute mean and covariance
+        mean = np.mean(all_features_matrix, axis=0)  # shape: (C,)
+        cov = np.cov(all_features_matrix, rowvar=False)  # shape: (C, C)
+
+        # Save to disk
+        mean_path = os.path.join(features_dir, f"mean_dense_level_{level}.npy")
+        cov_path = os.path.join(features_dir, f"cov_dense_level_{level}.npy")
+
+        np.save(mean_path, mean)
+        np.save(cov_path, cov)
+
+        print(f"Saved mean and covariance for level {level}.")
+
+    print("Done.")
+
+
+
+
+        
+    
+
 
 def detect_and_track_with_roi(video_reader, masa_model, masa_test_pipeline, texts="person", unified=True, test_pipeline=None, det_model=None, no_post=False, fp16=False):
     frame_idx = 0
     instances_list = []
     frames = []
+    features_dir = "saved_features"
+    os.makedirs(features_dir, exist_ok=True)
+
+    
+
     
     for frame in track_iter_progress((video_reader, len(video_reader))):
         def hook_fn(module, input, output):
@@ -70,9 +129,17 @@ def detect_and_track_with_roi(video_reader, masa_model, masa_test_pipeline, text
             H, W = frame.shape[:2]
 
             # Feature maps from the neck (hooked earlier)
-            feature_maps = masa_model.detector.neck.feature_map
+            dense_fm = masa_model.detector.neck.feature_map
 
-            for i, fmap in enumerate(feature_maps):
+            # Save all pyramid levels
+            for level_idx, fmap in enumerate(dense_fm):
+                fmap_np = fmap.cpu().numpy()
+                fname = f"features_dense_frame_{frame_idx:05d}_level_{level_idx}.npy"
+                np.save(os.path.join(features_dir, fname), fmap_np)
+
+            
+
+            for i, fmap in enumerate(feature_map):
                 B, C, Hf, Wf = fmap.shape
                 scale_H = H / Hf
                 scale_W = W / Wf
@@ -93,6 +160,11 @@ def detect_and_track_with_roi(video_reader, masa_model, masa_test_pipeline, text
                 batch_boxes = torch.tensor(batch_boxes, dtype=torch.float, device=feature_map.device)
                 # Use output_size (7,7) and spatial_scale (1/16) as an example
                 roi_features = roi_align(feature_map, batch_boxes, output_size=(7, 7), spatial_scale=1/16.0)
+                # Save ROI features if any
+                if roi_features is not None:
+                    roi_features_np = roi_features.cpu().numpy()
+                    fname = f"features_roi_frame_{frame_idx:05d}.npy"
+                    np.save(os.path.join(features_dir, fname), roi_features_np)
             else:
                 roi_features = None
             # Attach ROI features to the tracking result
@@ -100,6 +172,7 @@ def detect_and_track_with_roi(video_reader, masa_model, masa_test_pipeline, text
 
         
         else:
+            print("Using detection branch")
             # Detection branch processing
             result = inference_detector(det_model, frame,
                                         text_prompt=texts,
@@ -126,120 +199,15 @@ def detect_and_track_with_roi(video_reader, masa_model, masa_test_pipeline, text
             # (You can also include ROI-Align here if desired in a similar fashion.)
         
         frame_idx += 1
-        print('Number of bbox detected:', len(track_result[0].pred_track_instances.bboxes))
+        #print('Number of bbox detected:', len(track_result[0].pred_track_instances.bboxes))
         
         # Make sure bboxes are in float32
-        track_result[0].pred_track_instances.bboxes = track_result[0].pred_track_instances.bboxes.to(torch.float32)
-        instances_list.append(track_result.to("cpu"))
-        frames.append(frame)
-    
-    if not no_post:
-        instances_list = filter_and_update_tracks(instances_list, (frame.shape[1], frame.shape[0]))
-    
-    return instances_list, frames
+      
 
 
 
-def create_tracks(instances_list, score_threshold=0.2):
-    track_data = {}
-    
-    for frame_idx, track_result in enumerate(instances_list):
-        data_sample = track_result[0]
 
-        if "pred_track_instances" in data_sample:
-            pred_instances = data_sample.pred_track_instances
-        
-            if "scores" in pred_instances:
-                pred_instances = pred_instances[pred_instances.scores > score_threshold]
-        
-            if ("instances_id" in pred_instances) and (pred_instances.instances_id.size()):
-                for _id, (x1, y1, x2, y2) in zip(pred_instances.instances_id, pred_instances.bboxes):
-                    x1, y1 = x1.item(), y1.item()
-                    x2, y2 = x2.item(), y2.item()
-                    r_id = _id.item()
-                    new_bb = (x1, y1, x2, y2)
-                    new_point = ((x1 + x2) / 2, max(y1, y2))
-                    
-                    if r_id not in track_data:
-                        frame_data = (new_point, (0.0, 0.0), (0.0, 0.0), new_bb)
-                        track_data[r_id] = (random_color(_id), {frame_idx : frame_data})
 
-                    else:
-                        frames_data = track_data[r_id][1]
-                        last_point = frames_data[next(reversed(frames_data.keys()))][0]
-                        new_x_couple = (last_point[0], new_point[0])
-                        new_y_couple = (last_point[1], new_point[1])
-                        frames_data[frame_idx] = (new_point, new_x_couple, new_y_couple, new_bb)
-
-    return track_data
-
-def serialize_track_data(f_name, track_data):
-    with open(f_name, "w") as f:
-        json.dump(track_data, f, indent=4)
-
-def deserialize_track_data(f_name):
-    with open(f_name, "r") as f:
-        return json.load(f)
-
-def draw_frame(visualizer, track_data, frame, frame_idx, track_width=5, bb_width=10, bb_alpha=0.6, bb_text_size=None, no_track=False, no_bb=False):
-    image = frame[:, :, ::-1]
-
-    visualizer.set_image(image)
-    for id, (color, frames_data) in track_data.items():
-        idx = 0
-        x_c_lists = [[]]
-        y_c_lists = [[]]
-        bb_found = False
-        for f_idx, (point, x_couple, y_couple, f_bb) in frames_data.items():
-            if int(f_idx) > frame_idx:
-                break
-            if (x_couple != (0, 0) or y_couple != (0, 0)):
-                x_c_lists[idx].append(x_couple)
-                y_c_lists[idx].append(y_couple)
-            else:
-                idx += 1
-                x_c_lists.append([])
-                y_c_lists.append([])
-            if int(f_idx) == frame_idx:
-                bb = f_bb
-                bb_found = True
-                break
-        x_c_lists = [x_couple for x_couple in x_c_lists if x_couple]
-        y_c_lists = [y_couple for y_couple in y_c_lists if y_couple]
-
-        if (not no_track) and (x_c_lists):
-            for x_couples, y_couples in zip(x_c_lists, y_c_lists):
-                    visualizer.draw_lines(x_datas=torch.tensor(x_couples), y_datas=torch.tensor(y_couples), colors=tuple(color), line_widths=track_width)
-        if (not no_bb) and (bb_found):
-            visualizer.draw_bboxes(bboxes=torch.tensor(bb), edge_colors=tuple(color), line_widths=bb_width, alpha=bb_alpha)
-            visualizer.draw_texts(texts=str(id), positions=torch.tensor((bb[0], bb[1])), font_sizes=bb_text_size)
-    drawn_img = visualizer.get_image()
-    
-    gc.collect()
-    return drawn_img
-
-def draw_frame_unpacker(arg):
-    return draw_frame(*arg)
-
-def draw_video(frames, track_data, track_width=5, bb_width=10, bb_alpha=0.6, bb_text_size=None, disable_track_video=False, disable_bb=False):
-    visualizer = Visualizer()
-    num_cores = max(1, min(os.cpu_count() - 1, 16))
-    frames_per_core = min((len(frames) // num_cores) + 1, 32)
-
-    frames = track_parallel_progress(
-                    draw_frame_unpacker,
-                    [(visualizer, track_data, frame, idx, track_width, bb_width, bb_alpha, bb_text_size, disable_track_video, disable_bb) for idx, frame in enumerate(frames)],
-                    num_cores,
-                    chunksize=frames_per_core)
-
-    return frames
-
-def write_video(out_video, frames, fps, width, height):
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    video_writer = cv2.VideoWriter(out_video, fourcc, fps, (width, height))
-    for frame in track_iter_progress(frames, len(frames)):
-        video_writer.write(frame[:, :, ::-1])
-    video_writer.release()
 
 def parse_args():
     parser = argparse.ArgumentParser(prog="People Tracker")
@@ -317,7 +285,7 @@ def detect_mode(args):
     video_reader = mmcv.VideoReader(args.in_video)
 
     print("Starting to detect and track...")
-    instances_list, frames = detect_and_track_with_roi(video_reader,
+    detect_and_track_with_roi(video_reader,
                                     masa_model,
                                     masa_test_pipeline,
                                     args.texts,
@@ -326,75 +294,15 @@ def detect_mode(args):
                                     det_model,
                                     args.no_post,
                                     args.fp16)
-    #track_data = create_tracks(instances_list, args.score_thr)
+    compute_mean_std("saved_features")
 
-    #if not args.disable_track_file:
-        #print("Serializing track data...")
-        #serialize_track_data(args.out_tracks, track_data)
-
-    #if not args.disable_out_video:
-        #print("Starting to draw...")
-        #frames = draw_video(frames, track_data, args.track_width, args.bb_width, args.bb_alpha, args.bb_text_size, args.disable_track_video, args.disable_bb)
-        
-        #print("Starting to write...")
-        #write_video(args.out_video, frames, video_reader.fps, video_reader.width, video_reader.height)
-        
-        #print("Done")
-
-def draw_mode(args):
-    print("Deserializing track data...")
-    track_data = deserialize_track_data(args.in_tracks)
-    video_reader = mmcv.VideoReader(args.in_video)
-
-    if args.individually:
-        for s_track_id, s_track_data in track_data.items():
-            print(f"Starting to draw {s_track_id}th track image...")
-            frames = draw_video(video_reader[:], {s_track_id : s_track_data}, args.track_width, args.bb_width, args.bb_alpha, args.bb_text_size, args.disable_track_video, args.disable_bb)
-            
-            print(f"Starting to write {s_track_id}th track image...")
-            out_video = os.path.splitext(args.out_video)[0] + "_" + str(s_track_id) + ".mp4"
-            write_video(out_video, frames, video_reader.fps, video_reader.width, video_reader.height)
-    
-    elif args.tracks_to_draw:
-        tracks_to_draw = [{}]
-        elem_idx = 0
-        for track_id in args.tracks_to_draw:
-            if track_id != "-1":
-                tracks_to_draw[elem_idx][track_id] = track_data[track_id]
-            else:
-                elem_idx = elem_idx + 1
-                tracks_to_draw.append({})
-        
-        for idx, tracks in enumerate(tracks_to_draw):
-            print(f"Starting to draw {idx + 1}th image...")
-            frames = draw_video(video_reader[:], tracks, args.track_width, args.bb_width, args.bb_alpha, args.bb_text_size, args.disable_track_video, args.disable_bb)
-            
-            print(f"Starting to write {idx + 1}th image...")
-            out_video = os.path.splitext(args.out_video)[0] + "_" + str(idx) + ".mp4"
-            write_video(out_video, frames, video_reader.fps, video_reader.width, video_reader.height)
-    
-    else:
-        print("Starting to draw...")
-        frames = draw_video(video_reader[:], track_data, args.track_width, args.bb_width, args.bb_alpha, args.bb_text_size, args.disable_track_video, args.disable_bb)
-
-        print("Starting to write...")
-        write_video(args.out_video, frames, video_reader.fps, video_reader.width, video_reader.height)
-    
-    print("Done")
 
 def main():
     args = parse_args()
     check_args(args)
-    seed = 42
-
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
+    
     if args.detect:
         detect_mode(args)
-    elif args.draw:
-        draw_mode(args)
 
 if __name__ == "__main__":
     main()
