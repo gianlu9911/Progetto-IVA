@@ -11,8 +11,8 @@ warnings.filterwarnings("ignore")
 import argparse
 from torchvision.ops import roi_align
 import torch
-
-
+import re
+from collections import defaultdict
 import mmcv
 from mmcv.transforms import Compose
 from mmdet.apis import init_detector
@@ -21,8 +21,7 @@ from mmcv.ops.nms import batched_nms
 from mmengine.visualization import Visualizer
 
 from masa.apis import inference_masa, init_masa, inference_detector, build_test_pipeline
-from utils import filter_and_update_tracks
-from masa.visualization.visualizer import random_color
+
 
 def startup_masa(masa_config, masa_checkpoint, device="cuda:0", unified=True, det_config=None, det_checkpoint=None):
     masa_model = init_masa(masa_config, masa_checkpoint, device=device)
@@ -37,173 +36,79 @@ def startup_masa(masa_config, masa_checkpoint, device="cuda:0", unified=True, de
     
     return masa_model, masa_test_pipeline, det_model, test_pipeline
 
-def compute_mean_std(features_dir):
-    """
-    Compute the mean and standard deviation of features saved in the specified directory.
-    """
-
-    # ---- Configurations ----
-    num_levels = 4
-    num_frames = 144
-
-    # ---- Loop over pyramid levels ----
-    for level in range(num_levels):
-        print(f"Processing dense features for level {level}...")
-
-        all_features = []
-
-        for frame_idx in range(num_frames):
-            # Load dense feature file for this frame and level
-            fname = f"features_dense_frame_{frame_idx:05d}_level_{level}.npy"
-            fpath = os.path.join(features_dir, fname)
-
-            if not os.path.exists(fpath):
-                print(f"Warning: {fpath} not found.")
-                continue
-
-            fmap = np.load(fpath)  # shape: (1, C, H, W) or (C, H, W)
-            if fmap.ndim == 4:
-                fmap = fmap.squeeze(0)  # Remove batch dim → (C, H, W)
-
-            C, H, W = fmap.shape
-            fmap = fmap.reshape(C, -1).T  # shape: (H*W, C)
-            all_features.append(fmap)
-
-        if not all_features:
-            print(f"No features found for level {level}. Skipping.")
-            continue
-
-        # Stack all features into one matrix → shape: (N_total, C)
-        all_features_matrix = np.vstack(all_features)
-
-        # Compute mean and covariance
-        mean = np.mean(all_features_matrix, axis=0)  # shape: (C,)
-        cov = np.cov(all_features_matrix, rowvar=False)  # shape: (C, C)
-
-        # Save to disk
-        mean_path = os.path.join(features_dir, f"mean_dense_level_{level}.npy")
-        cov_path = os.path.join(features_dir, f"cov_dense_level_{level}.npy")
-
-        np.save(mean_path, mean)
-        np.save(cov_path, cov)
-
-        print(f"Saved mean and covariance for level {level}.")
-
-    print("Done.")
-
-
-
-
-        
-    
-
-
 def detect_and_track_with_roi(video_reader, masa_model, masa_test_pipeline, texts="person", unified=True, test_pipeline=None, det_model=None, no_post=False, fp16=False):
     frame_idx = 0
-    instances_list = []
-    frames = []
-    features_dir = "saved_features"
+    features_dir = "saved_features_per_bbox"
     os.makedirs(features_dir, exist_ok=True)
-
     
+    score_threshold = 0.5  
 
-    
     for frame in track_iter_progress((video_reader, len(video_reader))):
+        # Register a forward hook on the neck to extract dense features
         def hook_fn(module, input, output):
-                # Save the output in an attribute, so you can retrieve it later
-                module.feature_map = output
-
-            # Register the hook on the neck (ChannelMapper) of the detector:
+            module.feature_map = output
         masa_model.detector.neck.register_forward_hook(hook_fn)
+
         if unified:
-            # Perform the base inference using MASA
-            track_result = inference_masa(masa_model, frame,
-                                        frame_id=frame_idx,
-                                        video_len=len(video_reader),
-                                        test_pipeline=masa_test_pipeline,
-                                        text_prompt=texts,
-                                        fp16=fp16)
-            # ----- ROI-Align Integration for the unified branch -----
+            # Inference with MASA 
+            track_result = inference_masa(
+                masa_model,
+                frame,
+                frame_id=frame_idx,
+                video_len=len(video_reader),
+                test_pipeline=masa_test_pipeline,
+                text_prompt=texts,
+                fp16=fp16
+            )
+
+            # Feature maps from neck
             feature_map = masa_model.detector.neck.feature_map
-            # Original input resolution
+            if isinstance(feature_map, (tuple, list)):
+                feature_map = feature_map[0]  # Use first level, in case, there are 4 levels
+
+            _, _, H_feat, W_feat = feature_map.shape
             H, W = frame.shape[:2]
 
-            # Feature maps from the neck (hooked earlier)
-            dense_fm = masa_model.detector.neck.feature_map
+            # Prepare bounding boxes and scores
+            det_instances = track_result[0].pred_track_instances
+            det_bboxes = det_instances.bboxes           # Tensor [N, 4]
+            scores = det_instances.scores               # Tensor [N]
+            track_ids = det_instances.instances_id      # Tensor [N]
 
-            # Save all pyramid levels
-            for level_idx, fmap in enumerate(dense_fm):
-                fmap_np = fmap.cpu().numpy()
-                fname = f"features_dense_frame_{frame_idx:05d}_level_{level_idx}.npy"
-                np.save(os.path.join(features_dir, fname), fmap_np)
+            print(f"Frame {frame_idx}: {len(det_bboxes)} detections")
+            print(f"Scores: {scores.tolist()}")
 
-            
-
-            for i, fmap in enumerate(feature_map):
-                B, C, Hf, Wf = fmap.shape
-                scale_H = H / Hf
-                scale_W = W / Wf
-
-            # If the output is a tuple, get the first tensor.
-            if isinstance(feature_map, (tuple, list)):
-                feature_map = feature_map[0]
-                
-            
-            # Extract detected bounding boxes
-            det_bboxes = track_result[0].pred_track_instances.bboxes  # Expected to be [N, 4]
+            # Prepare ROIs for roi_align: [batch_idx, x1, y1, x2, y2]
             batch_boxes = []
-            # Prepare boxes with batch index (assuming all boxes belong to batch index 0)
             for bbox in det_bboxes:
                 x1, y1, x2, y2 = bbox.tolist()
                 batch_boxes.append([0, x1, y1, x2, y2])
-            if len(batch_boxes) > 0:
-                batch_boxes = torch.tensor(batch_boxes, dtype=torch.float, device=feature_map.device)
-                # Use output_size (7,7) and spatial_scale (1/16) as an example
-                roi_features = roi_align(feature_map, batch_boxes, output_size=(7, 7), spatial_scale=1/16.0)
-                # Save ROI features if any
-                if roi_features is not None:
-                    roi_features_np = roi_features.cpu().numpy()
-                    fname = f"features_roi_frame_{frame_idx:05d}.npy"
-                    np.save(os.path.join(features_dir, fname), roi_features_np)
-            else:
-                roi_features = None
-            # Attach ROI features to the tracking result
-            track_result[0].roi_features = roi_features
 
-        
+            if len(batch_boxes) > 0:
+                batch_boxes_tensor = torch.tensor(batch_boxes, dtype=torch.float, device=feature_map.device)
+                spatial_scale = W_feat / W  # Adjust if needed
+
+                # Extract ROI features
+                roi_feats = roi_align(
+                    feature_map,
+                    batch_boxes_tensor,
+                    output_size=(7, 7),
+                    spatial_scale=spatial_scale
+                )
+
+                # Save each bbox feature if score passes the threshold
+                for idx, (bbox, tid, roi_feat, score) in enumerate(zip(det_bboxes, track_ids, roi_feats, scores)):
+                    if score >= score_threshold:
+                        roi_feat_np = roi_feat.cpu().numpy()
+                        x1, y1, x2, y2 = bbox.tolist()
+                        fname = f"frame_{frame_idx:05d}_id_{int(tid)}_bbox_{int(x1)}_{int(y1)}_{int(x2)}_{int(y2)}.npy"
+                        path = os.path.join(features_dir, fname)
+                        np.save(path, roi_feat_np)
+
         else:
-            print("Using detection branch")
-            # Detection branch processing
-            result = inference_detector(det_model, frame,
-                                        text_prompt=texts,
-                                        test_pipeline=test_pipeline,
-                                        fp16=fp16)
-            det_bboxes, keep_idx = batched_nms(
-                boxes=result.pred_instances.bboxes,
-                scores=result.pred_instances.scores,
-                idxs=result.pred_instances.labels,
-                class_agnostic=True,
-                nms_cfg=dict(type="nms",
-                             iou_threshold=0.5,
-                             class_agnostic=True,
-                             split_thr=100000))
-            det_bboxes = torch.cat([det_bboxes, result.pred_instances.scores[keep_idx].unsqueeze(1)], dim=1)
-            det_labels = result.pred_instances.labels[keep_idx]
-            # Pass detection results into inference_masa
-            track_result = inference_masa(masa_model, frame, frame_id=frame_idx,
-                                          video_len=len(video_reader),
-                                          test_pipeline=masa_test_pipeline,
-                                          det_bboxes=det_bboxes,
-                                          det_labels=det_labels,
-                                          fp16=fp16)
-            # (You can also include ROI-Align here if desired in a similar fashion.)
+            print("Unified mode required for ROI features.")
         
         frame_idx += 1
-        #print('Number of bbox detected:', len(track_result[0].pred_track_instances.bboxes))
-        
-        # Make sure bboxes are in float32
-      
-
 
 
 
@@ -274,6 +179,7 @@ def check_args(args):
         print("When running the script either use detect (--detect) or draw (--draw) mode")
         exit()
 
+
 def detect_mode(args):
     print("Setting up...")
     masa_model, masa_test_pipeline, det_model, test_pipeline = startup_masa(args.masa_config,
@@ -294,7 +200,6 @@ def detect_mode(args):
                                     det_model,
                                     args.no_post,
                                     args.fp16)
-    compute_mean_std("saved_features")
 
 
 def main():
@@ -303,6 +208,8 @@ def main():
     
     if args.detect:
         detect_mode(args)
+    elif args.draw:
+        print("damn")
 
 if __name__ == "__main__":
     main()
