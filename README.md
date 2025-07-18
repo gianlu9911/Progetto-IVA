@@ -8,9 +8,11 @@ progetto per laboratorio di Image and Video Analysis
    git clone https://github.com/gianlu9911/Progetto-IVA.git
    ```
 2) Very important: create a folder called 'saved_models'. Make sure to to download the models from here:
-   ```[https://github.com/siyuanliii/masa?tab=readme-ov-file](https://huggingface.co/dereksiyuanli/masa/resolve/main/gdino_masa.pth)```
+   ```https://huggingface.co/dereksiyuanli/masa/resolve/main/gdino_masa.pth```
 3) Please, create a virtual environment. With Conda you can run:
+   ```
    conda create masaenv
+   ```
    Tested with python 11 working.
 5) Remember to activate it! you can run: conda activate masaenv
 6) In order to fulfill every requirements, plese, use the install_dependecies.bat or install_dependecies.sh
