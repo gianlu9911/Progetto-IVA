@@ -14,10 +14,14 @@ progetto per laboratorio di Image and Video Analysis
    conda create masaenv
    ```
    Tested with python 11 working.
-5) Remember to activate it! you can run: conda activate masaenv
-6) In order to fulfill every requirements, plese, use the install_dependecies.bat or install_dependecies.sh
+5) Activate it
+   ```
+   conda activate masaenv
+   ```
+7) In order to fulfill every requirements, plese, use the ```install_dependecies.bat``` or ```install_dependecies.sh```
 
 # Feature Extraction
 Once you have the virtual environment with the requirements and the folder with the model you can run:
-python my_scripts\featureMeanStd.py --detect --in_video videos\ins\clip_0.mp4 --out_video videos\outs\micc_2_out_unified.mp4 --out_tracks tracks\micc_2_tracks_unified.json --unified --masa_config configs\masa-gdino\masa_gdino_swinb_inference.py --masa_checkpoint saved_models\masa_models\gdino_masa.pth
+```
+python my_scripts\featureMeanStd.py --detect --in_video videos\ins\clip_0.mp4 --out_video videos\outs\micc_2_out_unified.mp4 --out_tracks tracks\micc_2_tracks_unified.json --unified --masa_config configs\masa-gdino\masa_gdino_swinb_inference.py --masa_checkpoint saved_models\masa_models\gdino_masa.pth```
 
