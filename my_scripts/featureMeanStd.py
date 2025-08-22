@@ -36,21 +36,31 @@ def startup_masa(masa_config, masa_checkpoint, device="cuda:0", unified=True, de
     
     return masa_model, masa_test_pipeline, det_model, test_pipeline
 
-def detect_and_track_with_roi(video_reader, masa_model, masa_test_pipeline, texts="person", unified=True, test_pipeline=None, det_model=None, no_post=False, fp16=False):
+from torchvision.ops import roi_align
+import torch
+import numpy as np
+import os
+
+def detect_and_track_with_roi(video_reader, masa_model, masa_test_pipeline, texts="person",
+                              unified=True, test_pipeline=None, det_model=None,
+                              no_post=False, fp16=False):
+
     frame_idx = 0
-    features_dir = "saved_features_per_bbox"
+    features_dir = "saved_features_per_neck"
     os.makedirs(features_dir, exist_ok=True)
-    
     score_threshold = 0.5  
 
+    # -------------------
+    # 1. Hook sul neck UNA SOLA VOLTA
+    # -------------------
+    def hook_fn(module, input, output):
+        module.feature_map = output
+    masa_model.detector.neck.register_forward_hook(hook_fn)
+
     for frame in track_iter_progress((video_reader, len(video_reader))):
-        # Register a forward hook on the neck to extract dense features
-        def hook_fn(module, input, output):
-            module.feature_map = output
-        masa_model.detector.neck.register_forward_hook(hook_fn)
 
         if unified:
-            # Inference with MASA 
+            # Inference con MASA
             track_result = inference_masa(
                 masa_model,
                 frame,
@@ -61,34 +71,33 @@ def detect_and_track_with_roi(video_reader, masa_model, masa_test_pipeline, text
                 fp16=fp16
             )
 
-            # Feature maps from neck
+            # Recupero features dal neck
             feature_map = masa_model.detector.neck.feature_map
             if isinstance(feature_map, (tuple, list)):
-                feature_map = feature_map[0]  # Use first level, in case, there are 4 levels
+                feature_map = feature_map[0]  # primo livello se multilivello
 
             _, _, H_feat, W_feat = feature_map.shape
             H, W = frame.shape[:2]
 
-            # Prepare bounding boxes and scores
+            # Bounding boxes, score e ID
             det_instances = track_result[0].pred_track_instances
-            det_bboxes = det_instances.bboxes           # Tensor [N, 4]
-            scores = det_instances.scores               # Tensor [N]
-            track_ids = det_instances.instances_id      # Tensor [N]
+            det_bboxes = det_instances.bboxes
+            scores = det_instances.scores
+            track_ids = det_instances.instances_id
 
-            print(f"Frame {frame_idx}: {len(det_bboxes)} detections")
-            print(f"Scores: {scores.tolist()}")
+            #print(f"Frame {frame_idx}: {len(det_bboxes)} detections")
+            #print(f"Scores: {scores.tolist()}")
 
-            # Prepare ROIs for roi_align: [batch_idx, x1, y1, x2, y2]
+            # ROI Align
             batch_boxes = []
             for bbox in det_bboxes:
                 x1, y1, x2, y2 = bbox.tolist()
                 batch_boxes.append([0, x1, y1, x2, y2])
 
-            if len(batch_boxes) > 0:
+            if batch_boxes:
                 batch_boxes_tensor = torch.tensor(batch_boxes, dtype=torch.float, device=feature_map.device)
-                spatial_scale = W_feat / W  # Adjust if needed
+                spatial_scale = W_feat / W  # attenzione: valido se resize lineare
 
-                # Extract ROI features
                 roi_feats = roi_align(
                     feature_map,
                     batch_boxes_tensor,
@@ -96,14 +105,13 @@ def detect_and_track_with_roi(video_reader, masa_model, masa_test_pipeline, text
                     spatial_scale=spatial_scale
                 )
 
-                # Save each bbox feature if score passes the threshold
-                for idx, (bbox, tid, roi_feat, score) in enumerate(zip(det_bboxes, track_ids, roi_feats, scores)):
+                # Salvataggio features filtrate per score
+                for bbox, tid, roi_feat, score in zip(det_bboxes, track_ids, roi_feats, scores):
                     if score >= score_threshold:
                         roi_feat_np = roi_feat.cpu().numpy()
                         x1, y1, x2, y2 = bbox.tolist()
                         fname = f"frame_{frame_idx:05d}_id_{int(tid)}_bbox_{int(x1)}_{int(y1)}_{int(x2)}_{int(y2)}.npy"
-                        path = os.path.join(features_dir, fname)
-                        np.save(path, roi_feat_np)
+                        np.save(os.path.join(features_dir, fname), roi_feat_np)
 
         else:
             print("Unified mode required for ROI features.")
@@ -209,7 +217,7 @@ def main():
     if args.detect:
         detect_mode(args)
     elif args.draw:
-        print("damn")
+        print("not implemented")
 
 if __name__ == "__main__":
     main()
