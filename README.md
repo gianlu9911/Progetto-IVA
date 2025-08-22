@@ -7,9 +7,9 @@ progetto per laboratorio di Image and Video Analysis
    ```
    git clone https://github.com/gianlu9911/Progetto-IVA.git
    ```
-2) Very important: create a folder called 'saved_models'. Make sure to to download the models from here:
+2) Very important: create a folder called 'saved_models' where to store your models. Make sure to to download the models from here:
    ```https://huggingface.co/dereksiyuanli/masa/resolve/main/gdino_masa.pth```
-3) Please, create a virtual environment. With Conda you can run:
+3) Create a virtual environment. With Conda you can run:
    ```
    conda create masaenv
    ```
