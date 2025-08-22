@@ -6,6 +6,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, project_root)
 
+
 import warnings
 warnings.filterwarnings("ignore")
 import argparse
@@ -35,11 +36,7 @@ def startup_masa(masa_config, masa_checkpoint, device="cuda:0", unified=True, de
         test_pipeline = None
     
     return masa_model, masa_test_pipeline, det_model, test_pipeline
-
-from torchvision.ops import roi_align
-import torch
-import numpy as np
-import os
+    
 
 def detect_and_track_with_roi(video_reader, masa_model, masa_test_pipeline, texts="person",
                               unified=True, test_pipeline=None, det_model=None,
@@ -221,3 +218,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
