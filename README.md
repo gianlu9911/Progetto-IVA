@@ -32,6 +32,6 @@ A folder called ```saved_features_per_bbox``` will be generated. It containes th
 
 REQUIRES to execute the featureMeanStd.py script above!
 
-run ```my_script/heuristic.py``` script to fit a Guassian Mixture over the feature
+run ```python my_script/heuristic.py``` script to execute the heuristic for id re-assignments.
 
 
