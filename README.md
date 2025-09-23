@@ -11,7 +11,7 @@ progetto per laboratorio di Image and Video Analysis
    ```https://huggingface.co/dereksiyuanli/masa/resolve/main/gdino_masa.pth```
 3) Create a virtual environment. With Conda you can run:
    ```
-   conda create masaenv
+   conda create -n masaenv
    ```
    Tested with python 11 working.
 5) Activate it
