@@ -20,9 +20,10 @@ progetto per laboratorio di Image and Video Analysis
    ```
 7) In order to fulfill every requirements, plese, use the ```install_dependecies.bat``` or ```install_dependecies.sh```
 
+```
 FOR LINUX USERS:
  for trubles during installation, please check: ```https://github.com/siyuanliii/masa/tree/main```
-
+```
 # Feature Extraction
 Once you have the virtual environment with the requirements and the folder with the model you can run:
 ```
