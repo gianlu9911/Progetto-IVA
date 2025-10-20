@@ -2,6 +2,7 @@
 progetto per laboratorio di Image and Video Analysis
 
 # How to run this project
+FOR WINDOWS USERS
 0) git clone of this repo:
    
    ```
@@ -21,8 +22,43 @@ progetto per laboratorio di Image and Video Analysis
 7) In order to fulfill every requirements, plese, use the ```install_dependecies.bat``` or ```install_dependecies.sh```
 
 
-8) FOR LINUX USERS:
- for trubles during installation, please check: ```https://github.com/siyuanliii/masa/tree/main```
+FOR LINUX USERS:
+0) make sure you have conda or miniconda on your systema
+1)
+   ```
+   conda create -n masaenv python=3.11 -y
+   conda activate masaenv
+
+   ```
+
+2)
+   ```
+   pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cu118
+
+   ```
+
+3)
+   ```
+   pip install numpy==1.26
+
+   ```
+4)
+     ```
+     pip install pip install opencv-python==4.11.0.86
+
+      ```
+
+5)
+```
+   sh install_dependencies.sh
+  ```
+
+ 6)
+ ```
+sh install_dependencies.sh
+
+```
+
 
 # Feature Extraction
 Once you have the virtual environment with the requirements and the folder with the model you can run:
