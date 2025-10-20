@@ -8,7 +8,7 @@ FOR WINDOWS USERS
    ```
    git clone https://github.com/gianlu9911/Progetto-IVA.git
    ```
-2) Very important: create a folder called 'saved_models' where to store your models. Make sure to to download the models from here:
+2) Very important: create a folder called 'saved_models/masa_models' where to store your models. Make sure to to download the models from here:
    ```https://huggingface.co/dereksiyuanli/masa/resolve/main/gdino_masa.pth```
 3) Create a virtual environment. With Conda you can run:
    ```
@@ -58,6 +58,27 @@ FOR LINUX USERS:
 sh install_dependencies.sh
 
 ```
+7)
+
+```
+mkdir saved_models
+```
+8)
+```
+cd saved_models
+mkdir masa_models
+wget https://huggingface.co/dereksiyuanli/masa/resolve/main/gdino_masa.pth
+```
+
+9)
+create a python file and writ
+```
+import nltk
+nltk.download('averaged_perceptron_tagger_eng')
+```
+
+and execute it
+
 
 
 # Feature Extraction
