@@ -23,7 +23,9 @@ FOR WINDOWS USERS
 
 
 FOR LINUX USERS:
-0) make sure you have conda or miniconda on your systema
+0) 
+Make sure you have conda or miniconda on your systema
+
 1)
    ```
    conda create -n masaenv python=3.11 -y
