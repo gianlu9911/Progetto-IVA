@@ -43,15 +43,14 @@ FOR LINUX USERS:
 
    ```
 4)
-     ```
-     pip install pip install opencv-python==4.11.0.86
-
-      ```
-
-5)
-```
-   sh install_dependencies.sh
   ```
+  pip install pip install opencv-python==4.11.0.86
+
+   ```
+5)
+   ```
+   sh install_dependencies.sh
+   ```
 
  6)
  ```
@@ -62,15 +61,12 @@ sh install_dependencies.sh
 
 ```
 mkdir saved_models
-```
-8)
-```
 cd saved_models
 mkdir masa_models
 wget https://huggingface.co/dereksiyuanli/masa/resolve/main/gdino_masa.pth
 ```
 
-9)
+8)
 create a python file and writ
 ```
 import nltk
