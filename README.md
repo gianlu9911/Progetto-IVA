@@ -65,11 +65,6 @@ wget https://huggingface.co/dereksiyuanli/masa/resolve/main/gdino_masa.pth
 ```
 
 7)
-create a python file and writ
-```
-import nltk
-nltk.download('averaged_perceptron_tagger_eng')
-```
 
 ```
 pip install -U scikit-learn
