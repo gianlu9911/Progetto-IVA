@@ -46,7 +46,7 @@ Make sure you have conda installed on your system, after that clone the repo
    ```
 4)
    ```
-   pip install pip install opencv-python==4.11.0.86
+   pip install opencv-python==4.11.0.86
    ```
 5)
    ```
