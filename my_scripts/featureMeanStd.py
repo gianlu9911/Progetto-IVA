@@ -6,7 +6,8 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, project_root)
 
-
+import nltk
+nltk.download('averaged_perceptron_tagger_eng')
 import warnings
 warnings.filterwarnings("ignore")
 import argparse
@@ -218,4 +219,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
