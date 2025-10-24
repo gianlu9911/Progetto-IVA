@@ -27,7 +27,8 @@ FOR LINUX USERS:
 Make sure you have conda installed on your system, after that clone the repo
    ```
    git clone https://github.com/gianlu9911/Progetto-IVA.git
-    ```
+   ```
+
 1)
    ```
    conda create -n masaenv python=3.11 -y
