@@ -54,20 +54,17 @@ Make sure you have conda installed on your system, after that clone the repo
    sh install_dependencies.sh
    ```
 
- 6)
-   ```
-   sh install_dependencies.sh
-   ```
-7)
+6)
 
 ```
 mkdir saved_models
 cd saved_models
 mkdir masa_models
+cd masa_models
 wget https://huggingface.co/dereksiyuanli/masa/resolve/main/gdino_masa.pth
 ```
 
-8)
+7)
 create a python file and writ
 ```
 import nltk
