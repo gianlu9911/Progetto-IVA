@@ -83,6 +83,11 @@ pip install -U scikit-learn
 
 and execute it
 
+in case you are missing some nltk file, just add to featureMeanStd.py or any new python file and run it
+```
+import nltk
+nltk.download('averaged_perceptron_tagger_eng')
+```
 
 
 # Feature Extraction
