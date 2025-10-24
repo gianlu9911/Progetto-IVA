@@ -22,7 +22,7 @@ FOR WINDOWS USERS
 7) In order to fulfill every requirements, plese, use the ```install_dependecies.bat``` or ```install_dependecies.sh```
 
 
-FOR LINUX USERS:
+# FOR LINUX USERS:
 0) 
 Make sure you have conda installed on your system, after that clone the repo
    ```
