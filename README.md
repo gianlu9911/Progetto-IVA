@@ -30,24 +30,20 @@ Make sure you have conda or miniconda on your systema
    ```
    conda create -n masaenv python=3.11 -y
    conda activate masaenv
-
    ```
 
 2)
    ```
    pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cu118
-
    ```
 
 3)
    ```
    pip install numpy==1.26
-
    ```
 4)
-  ```
-  pip install pip install opencv-python==4.11.0.86
-
+   ```
+   pip install pip install opencv-python==4.11.0.86
    ```
 5)
    ```
@@ -55,10 +51,9 @@ Make sure you have conda or miniconda on your systema
    ```
 
  6)
- ```
-sh install_dependencies.sh
-
-```
+   ```
+   sh install_dependencies.sh
+   ```
 7)
 
 ```
