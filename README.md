@@ -26,7 +26,7 @@ FOR LINUX USERS:
 0) 
 Make sure you have conda installed on your system, after that clone the repo
    ```
-   git clone
+   git clone https://github.com/gianlu9911/Progetto-IVA.git
     ```
 1)
    ```
