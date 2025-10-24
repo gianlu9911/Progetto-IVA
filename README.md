@@ -24,8 +24,10 @@ FOR WINDOWS USERS
 
 FOR LINUX USERS:
 0) 
-Make sure you have conda or miniconda on your systema
-
+Make sure you have conda installed on your system, after that clone the repo
+   ```
+   git clone
+    ```
 1)
    ```
    conda create -n masaenv python=3.11 -y
