@@ -50,6 +50,7 @@ Make sure you have conda installed on your system, after that clone the repo
    ```
 5)
    ```
+   cd Progetto-IVA
    sh install_dependencies.sh
    ```
 
