@@ -96,6 +96,9 @@ A folder called ```saved_features_per_bbox``` will be generated. It containes th
 
 REQUIRES to execute the featureMeanStd.py script above!
 
-run ```python my_script/heuristic.py``` script to execute the heuristic for id re-assignments.
+```
+python my_script/heuristic.py
+```
+Run script to execute the heuristic for id re-assignments.
 
 
