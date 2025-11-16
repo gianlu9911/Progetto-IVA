@@ -37,16 +37,20 @@ Make sure you have conda installed on your system, after that clone the repo
 
 2)
    ```
-   pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cu118
+   pip install --no-cache-dir --force-reinstall torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cu118
+
    ```
 
 3)
    ```
-   pip install numpy==1.26
+      pip install --no-cache-dir --force-reinstall opencv-python==4.11.0.86
+
    ```
 4)
    ```
-   pip install opencv-python==4.11.0.86
+
+   pip install --no-cache-dir --force-reinstall numpy==1.26
+
    ```
 5)
    ```
@@ -67,7 +71,8 @@ wget https://huggingface.co/dereksiyuanli/masa/resolve/main/gdino_masa.pth
 7)
 
 ```
-pip install -U scikit-learn
+pip install --no-cache-dir --force-reinstall -U scikit-learn
+
 ```
 
 
