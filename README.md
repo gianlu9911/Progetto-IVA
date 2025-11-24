@@ -33,32 +33,12 @@ Make sure you have conda installed on your system, after that clone the repo
    ```
    conda create -n masaenv python=3.11 -y
    conda activate masaenv
+   cd Progetto-IVA
+   chmod +x install_dependencies.sh
+   ./install_dependencies.sh
    ```
 
 2)
-   ```
-   pip install --no-cache-dir --force-reinstall torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cu118
-
-   ```
-
-3)
-   ```
-      pip install --no-cache-dir --force-reinstall opencv-python==4.11.0.86
-
-   ```
-4)
-   ```
-
-   pip install --no-cache-dir --force-reinstall numpy==1.26
-
-   ```
-5)
-   ```
-   cd Progetto-IVA
-   sh install_dependencies.sh
-   ```
-
-6)
 
 ```
 mkdir saved_models
@@ -68,19 +48,6 @@ cd masa_models
 wget https://huggingface.co/dereksiyuanli/masa/resolve/main/gdino_masa.pth
 ```
 
-7)
-
-```
-pip install --no-cache-dir --force-reinstall -U scikit-learn
-
-```
-
-
-in case you are missing some nltk file, just add to featureMeanStd.py or any new python file and run it
-```
-import nltk
-nltk.download('averaged_perceptron_tagger_eng')
-```
 
 
 # Feature Extraction
