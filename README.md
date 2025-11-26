@@ -16,9 +16,10 @@ Make sure you have conda installed on your system, after that clone the repo
    cd Progetto-IVA
    chmod +x install_dependencies.sh
    sh install_dependencies.sh
+    ```
 
-   eventually, if required
-
+eventually, if required
+```
    pip3 install -U scikit-learn
    pip install mmdet
    ```
